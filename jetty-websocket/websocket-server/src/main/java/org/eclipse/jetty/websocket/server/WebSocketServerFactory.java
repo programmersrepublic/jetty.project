@@ -561,9 +561,6 @@ public class WebSocketServerFactory extends ContainerLifeCycle implements WebSoc
             extensionStack.negotiate(request.getExtensions());
         }
         
-        // Policy
-        WebSocketPolicy policy = getPolicy().clonePolicy();
-
         // Get original HTTP connection
         EndPoint endp = http.getEndPoint();
         Connector connector = http.getConnector();
@@ -571,9 +568,9 @@ public class WebSocketServerFactory extends ContainerLifeCycle implements WebSoc
         ByteBufferPool bufferPool = connector.getByteBufferPool();
 
         // Setup websocket connection
-        AbstractWebSocketConnection wsConnection = new WebSocketServerConnection(endp, executor, scheduler, policy, bufferPool);
+        AbstractWebSocketConnection wsConnection = new WebSocketServerConnection(endp, executor, scheduler, getPolicy().clonePolicy(), bufferPool);
 
-        extensionStack.setPolicy(policy);
+        extensionStack.setPolicy(wsConnection.getPolicy());
         extensionStack.configure(wsConnection.getParser());
         extensionStack.configure(wsConnection.getGenerator());
 
@@ -585,7 +582,6 @@ public class WebSocketServerFactory extends ContainerLifeCycle implements WebSoc
 
         // Setup Session
         WebSocketSession session = createSession(request.getRequestURI(), websocket, wsConnection);
-        session.setPolicy(policy);
         session.setUpgradeRequest(request);
         // set true negotiated extension list back to response 
         response.setExtensions(extensionStack.getNegotiatedExtensions());
