@@ -44,6 +44,58 @@ public class HttpChannelState
 
     private final static long DEFAULT_TIMEOUT=Long.getLong("org.eclipse.jetty.server.HttpChannelState.DEFAULT_TIMEOUT",30000L);
 
+    private static class Event {
+        final String what;
+        final String who=Thread.currentThread().getName();
+        final Throwable where=new Throwable();
+        Event(String name)
+        {
+            what=name;
+        }
+        
+        void dump()
+        {
+            System.err.printf("what=%s who=%s%n",what,who);
+            where.printStackTrace();
+        }
+        
+        @Override
+        public String toString()
+        {
+            return String.format("what=%s who=%s where=%",what,who,where);
+        }
+    }
+    
+    private List<Event> _history=new ArrayList<>(8);
+    private List<Event> _last;
+    
+    public class ISE extends IllegalStateException
+    {
+
+        public ISE()
+        {
+        }
+
+        public ISE(String s)
+        {
+            super(s);
+            
+            synchronized (HttpChannelState.class)
+            {
+                System.err.println("ISE "+s);
+                new Throwable().printStackTrace();
+                System.err.println("history:");
+                _history.forEach(Event::dump);
+                if (_last!=null)
+                {
+                    System.err.println("last:");
+                    _last.forEach(Event::dump);
+                }
+            }
+        }
+    }
+    
+    
     /**
      * The dispatched state of the HttpChannel, used to control the overall lifecycle
      */
@@ -217,6 +269,8 @@ public class HttpChannelState
                         return Action.WRITE_CALLBACK;
                     }
 
+
+                    _history.add(new Event("handling"));
                     switch(_async)
                     {
                         case COMPLETE:
@@ -240,7 +294,7 @@ public class HttpChannelState
                         case NOT_ASYNC:
                             break;
                         default:
-                            throw new IllegalStateException(getStatusStringLocked());
+                            throw new ISE(getStatusStringLocked());
                     }
 
                     return Action.WAIT;
@@ -250,7 +304,7 @@ public class HttpChannelState
                 case DISPATCHED:
                 case UPGRADED:
                 default:
-                    throw new IllegalStateException(getStatusStringLocked());
+                    throw new ISE(getStatusStringLocked());
 
             }
         }
@@ -263,9 +317,10 @@ public class HttpChannelState
         try(Locker.Lock lock= _locker.lock())
         {
             if (_state!=State.DISPATCHED || _async!=Async.NOT_ASYNC)
-                throw new IllegalStateException(this.getStatusStringLocked());
+                throw new ISE(this.getStatusStringLocked());
 
             _async=Async.STARTED;
+            _history.add(new Event("startAsync"));
             _event=event;
             lastAsyncListeners=_asyncListeners;
             _asyncListeners=null;            
@@ -309,6 +364,7 @@ public class HttpChannelState
             if (_event!=null)
                 _event.addThrowable(th);
             _async=Async.ERRORING;
+            _history.add(new Event("error "+th));
         }
     }
 
@@ -341,10 +397,11 @@ public class HttpChannelState
                     break;
 
                 default:
-                    throw new IllegalStateException(this.getStatusStringLocked());
+                    throw new ISE(this.getStatusStringLocked());
             }
 
             _initial=false;
+            _history.add(new Event("unhandling"));
             switch(_async)
             {
                 case COMPLETE:
@@ -440,9 +497,10 @@ public class HttpChannelState
                 case ERRORED:
                     break;
                 default:
-                    throw new IllegalStateException(this.getStatusStringLocked());
+                    throw new ISE(this.getStatusStringLocked());
             }
             _async=Async.DISPATCH;
+            _history.add(new Event("dispatch "+path));
 
             if (context!=null)
                 _event.setDispatchContext(context);
@@ -482,6 +540,7 @@ public class HttpChannelState
             if (_async!=Async.STARTED)
                 return;
             _async=Async.EXPIRING;
+            _history.add(new Event("expiring"));
             event=_event;
             listeners=_asyncListeners;
 
@@ -525,6 +584,7 @@ public class HttpChannelState
         boolean dispatch=false;
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("expired"));
             switch(_async)
             {
                 case EXPIRING:
@@ -544,7 +604,7 @@ public class HttpChannelState
                     break;
                     
                 default:
-                    throw new IllegalStateException();
+                    throw new ISE();
             }
 
             if (_state==State.ASYNC_WAIT)
@@ -581,9 +641,10 @@ public class HttpChannelState
                 case ERRORED:
                     break;
                 default:
-                    throw new IllegalStateException(this.getStatusStringLocked());
+                    throw new ISE(this.getStatusStringLocked());
             }
             _async=Async.COMPLETE;
+            _history.add(new Event("complete"));
             
             if (started && _state==State.ASYNC_WAIT)
             {
@@ -602,6 +663,7 @@ public class HttpChannelState
         try(Locker.Lock lock= _locker.lock())
         {
             _async=Async.COMPLETE;
+            _history.add(new Event("error complete"));
             _event.setDispatchContext(null);
             _event.setDispatchPath(null);
         }
@@ -617,11 +679,12 @@ public class HttpChannelState
         try(Locker.Lock lock= _locker.lock())
         {
             if (_state!=State.DISPATCHED/* || _async!=Async.ERRORING*/)
-                throw new IllegalStateException(this.getStatusStringLocked());
+                throw new ISE(this.getStatusStringLocked());
 
             aListeners=_asyncListeners;
             event=_event;
             _async=Async.ERRORED;
+            _history.add(new Event("errored"));
         }
 
         if (event!=null && aListeners!=null)
@@ -650,6 +713,7 @@ public class HttpChannelState
 
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("onComplete"));
             switch(_state)
             {
                 case COMPLETING:
@@ -660,7 +724,7 @@ public class HttpChannelState
                     break;
 
                 default:
-                    throw new IllegalStateException(this.getStatusStringLocked());
+                    throw new ISE(this.getStatusStringLocked());
             }
         }
 
@@ -707,7 +771,7 @@ public class HttpChannelState
             {
                 case DISPATCHED:
                 case ASYNC_IO:
-                    throw new IllegalStateException(getStatusStringLocked());
+                    throw new ISE(getStatusStringLocked());
                 case UPGRADED:
                     return;
                 default:
@@ -721,6 +785,10 @@ public class HttpChannelState
             _asyncWrite=false;
             _timeoutMs=DEFAULT_TIMEOUT;
             _event=null;
+
+            _history.add(new Event("recycle"));
+            _last=_history;
+            _history=new ArrayList<>(8);
         }
     }
 
@@ -729,13 +797,14 @@ public class HttpChannelState
         cancelTimeout();
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("upgrade"));
             switch(_state)
             {
                 case IDLE:
                 case COMPLETED:
                     break;
                 default:
-                    throw new IllegalStateException(getStatusStringLocked());
+                    throw new ISE(getStatusStringLocked());
             }
             _asyncListeners=null;
             _state=State.UPGRADED;
