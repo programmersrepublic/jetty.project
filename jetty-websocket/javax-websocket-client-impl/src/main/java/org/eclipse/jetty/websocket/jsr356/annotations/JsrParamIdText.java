@@ -24,31 +24,22 @@ import javax.websocket.OnMessage;
 
 import org.eclipse.jetty.websocket.common.InvalidSignatureException;
 import org.eclipse.jetty.websocket.jsr356.annotations.Param.Role;
-import org.eclipse.jetty.websocket.jsr356.decoders.BooleanDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.ByteDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.CharacterDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.DoubleDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.FloatDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.IntegerDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.LongDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.ReaderDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.ShortDecoder;
-import org.eclipse.jetty.websocket.jsr356.decoders.StringDecoder;
 
 /**
  * Param handling for static Text &#064;{@link OnMessage} parameters
  */
+@Deprecated
 public class JsrParamIdText extends JsrParamIdOnMessage implements IJsrParamId
 {
     public static final IJsrParamId INSTANCE = new JsrParamIdText();
 
     private boolean isMessageRoleAssigned(JsrCallable callable)
     {
-        if (callable instanceof OnMessageCallable)
+        /*if (callable instanceof OnMessageCallable)
         {
             OnMessageCallable onmessage = (OnMessageCallable)callable;
             return onmessage.isMessageRoleAssigned();
-        }
+        }*/
         return false;
     }
 
@@ -65,7 +56,7 @@ public class JsrParamIdText extends JsrParamIdOnMessage implements IJsrParamId
         if (param.type.isAssignableFrom(String.class))
         {
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(StringDecoder.class);
+//            callable.setDecoderClass(StringDecoder.class);
             return true;
         }
 
@@ -74,56 +65,56 @@ public class JsrParamIdText extends JsrParamIdOnMessage implements IJsrParamId
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(BooleanDecoder.class);
+//            callable.setDecoderClass(BooleanDecoder.class);
             return true;
         }
         if (param.type.isAssignableFrom(Byte.class) || (param.type == Byte.TYPE))
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(ByteDecoder.class);
+//            callable.setDecoderClass(ByteDecoder.class);
             return true;
         }
         if (param.type.isAssignableFrom(Character.class) || (param.type == Character.TYPE))
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(CharacterDecoder.class);
+//            callable.setDecoderClass(CharacterDecoder.class);
             return true;
         }
         if (param.type.isAssignableFrom(Double.class) || (param.type == Double.TYPE))
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(DoubleDecoder.class);
+//            callable.setDecoderClass(DoubleDecoder.class);
             return true;
         }
         if (param.type.isAssignableFrom(Float.class) || (param.type == Float.TYPE))
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(FloatDecoder.class);
+//            callable.setDecoderClass(FloatDecoder.class);
             return true;
         }
         if (param.type.isAssignableFrom(Integer.class) || (param.type == Integer.TYPE))
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(IntegerDecoder.class);
+//            callable.setDecoderClass(IntegerDecoder.class);
             return true;
         }
         if (param.type.isAssignableFrom(Long.class) || (param.type == Long.TYPE))
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(LongDecoder.class);
+//            callable.setDecoderClass(LongDecoder.class);
             return true;
         }
         if (param.type.isAssignableFrom(Short.class) || (param.type == Short.TYPE))
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT);
-            callable.setDecoderClass(ShortDecoder.class);
+//            callable.setDecoderClass(ShortDecoder.class);
             return true;
         }
 
@@ -132,7 +123,7 @@ public class JsrParamIdText extends JsrParamIdOnMessage implements IJsrParamId
         {
             assertPartialMessageSupportDisabled(param,callable);
             param.bind(Role.MESSAGE_TEXT_STREAM);
-            callable.setDecoderClass(ReaderDecoder.class);
+//            callable.setDecoderClass(ReaderDecoder.class);
             return true;
         }
 
@@ -150,7 +141,7 @@ public class JsrParamIdText extends JsrParamIdOnMessage implements IJsrParamId
             else
             {
                 param.bind(Role.MESSAGE_TEXT);
-                callable.setDecoderClass(BooleanDecoder.class);
+//                callable.setDecoderClass(BooleanDecoder.class);
             }
             return true;
         }
