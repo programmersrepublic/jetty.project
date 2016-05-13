@@ -44,7 +44,8 @@ public class HttpChannelState
 
     private final static long DEFAULT_TIMEOUT=Long.getLong("org.eclipse.jetty.server.HttpChannelState.DEFAULT_TIMEOUT",30000L);
 
-    private static class Event {
+    private class Event {
+        final String state=getStatusStringLocked();
         final String what;
         final String who=Thread.currentThread().getName();
         final Throwable where=new Throwable();
@@ -55,14 +56,14 @@ public class HttpChannelState
         
         void dump()
         {
-            System.err.printf("what=%s who=%s%n",what,who);
+            System.err.printf("state=%s what=%s who=%s%n",state,what,who);
             where.printStackTrace();
         }
         
         @Override
         public String toString()
         {
-            return String.format("what=%s who=%s where=%",what,who,where);
+            return String.format("state=$s what=%s who=%s where=%",state,what,who,where);
         }
     }
     
@@ -241,6 +242,8 @@ public class HttpChannelState
             LOG.debug("{} handling {}",this,_state);
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("handling"));
+
             switch(_state)
             {
                 case IDLE:
@@ -269,8 +272,6 @@ public class HttpChannelState
                         return Action.WRITE_CALLBACK;
                     }
 
-
-                    _history.add(new Event("handling"));
                     switch(_async)
                     {
                         case COMPLETE:
@@ -361,10 +362,10 @@ public class HttpChannelState
     {
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("error "+th));
             if (_event!=null)
                 _event.addThrowable(th);
             _async=Async.ERRORING;
-            _history.add(new Event("error "+th));
         }
     }
 
@@ -386,6 +387,7 @@ public class HttpChannelState
 
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("unhandling"));
             switch(_state)
             {
                 case COMPLETING:
@@ -401,7 +403,6 @@ public class HttpChannelState
             }
 
             _initial=false;
-            _history.add(new Event("unhandling"));
             switch(_async)
             {
                 case COMPLETE:
@@ -486,6 +487,7 @@ public class HttpChannelState
         AsyncContextEvent event=null;
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("dispatch "+path));
             boolean started=false;
             event=_event;
             switch(_async)
@@ -500,7 +502,6 @@ public class HttpChannelState
                     throw new ISE(this.getStatusStringLocked());
             }
             _async=Async.DISPATCH;
-            _history.add(new Event("dispatch "+path));
 
             if (context!=null)
                 _event.setDispatchContext(context);
@@ -537,13 +538,14 @@ public class HttpChannelState
         AsyncContextEvent event;
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("expiring "+_asyncListeners));
             if (_async!=Async.STARTED)
+            {
                 return;
+            }
             _async=Async.EXPIRING;
-            _history.add(new Event("expiring"));
             event=_event;
             listeners=_asyncListeners;
-
         }
 
         if (LOG.isDebugEnabled())
@@ -629,9 +631,10 @@ public class HttpChannelState
         AsyncContextEvent event=null;
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("complete"));
             boolean started=false;
             event=_event;
-            
+
             switch(_async)
             {
                 case STARTED:
@@ -644,8 +647,7 @@ public class HttpChannelState
                     throw new ISE(this.getStatusStringLocked());
             }
             _async=Async.COMPLETE;
-            _history.add(new Event("complete"));
-            
+
             if (started && _state==State.ASYNC_WAIT)
             {
                 handle=true;
@@ -662,8 +664,8 @@ public class HttpChannelState
     {
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("errorComplete"));
             _async=Async.COMPLETE;
-            _history.add(new Event("error complete"));
             _event.setDispatchContext(null);
             _event.setDispatchPath(null);
         }
@@ -678,13 +680,13 @@ public class HttpChannelState
 
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("onError "+_asyncListeners));
             if (_state!=State.DISPATCHED/* || _async!=Async.ERRORING*/)
                 throw new ISE(this.getStatusStringLocked());
 
             aListeners=_asyncListeners;
             event=_event;
             _async=Async.ERRORED;
-            _history.add(new Event("errored"));
         }
 
         if (event!=null && aListeners!=null)
@@ -713,7 +715,7 @@ public class HttpChannelState
 
         try(Locker.Lock lock= _locker.lock())
         {
-            _history.add(new Event("onComplete"));
+            _history.add(new Event("onComplete "+_asyncListeners));
             switch(_state)
             {
                 case COMPLETING:
@@ -767,6 +769,7 @@ public class HttpChannelState
         cancelTimeout();
         try(Locker.Lock lock= _locker.lock())
         {
+            _history.add(new Event("recycle"));
             switch(_state)
             {
                 case DISPATCHED:
@@ -786,7 +789,6 @@ public class HttpChannelState
             _timeoutMs=DEFAULT_TIMEOUT;
             _event=null;
 
-            _history.add(new Event("recycle"));
             _last=_history;
             _history=new ArrayList<>(8);
         }
