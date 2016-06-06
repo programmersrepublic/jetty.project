@@ -19,32 +19,22 @@
 package org.eclipse.jetty.websocket.jsr356.client;
 
 import javax.websocket.ClientEndpoint;
-import javax.websocket.ClientEndpointConfig;
-import javax.websocket.DeploymentException;
-import javax.websocket.OnMessage;
-
-import org.eclipse.jetty.websocket.api.WebSocketPolicy;
-import org.eclipse.jetty.websocket.common.events.EventDriver;
-import org.eclipse.jetty.websocket.common.events.EventDriverImpl;
-import org.eclipse.jetty.websocket.jsr356.annotations.JsrEvents;
-import org.eclipse.jetty.websocket.jsr356.annotations.OnMessageCallable;
-import org.eclipse.jetty.websocket.jsr356.endpoints.EndpointInstance;
-import org.eclipse.jetty.websocket.jsr356.endpoints.JsrAnnotatedEventDriver;
 
 /**
  * Event Driver for classes annotated with &#064;{@link ClientEndpoint}
  */
-public class JsrClientEndpointImpl implements EventDriverImpl
+@Deprecated
+public class JsrClientEndpointImpl /*implements EventDriverImpl*/
 {
-    @Override
+/*    @Override
     public EventDriver create(Object websocket, WebSocketPolicy policy) throws DeploymentException
     {
-        if (!(websocket instanceof EndpointInstance))
+        if (!(websocket instanceof ConfiguredEndpoint))
         {
-            throw new IllegalStateException(String.format("Websocket %s must be an %s",websocket.getClass().getName(),EndpointInstance.class.getName()));
+            throw new IllegalStateException(String.format("Websocket %s must be an %s",websocket.getClass().getName(),ConfiguredEndpoint.class.getName()));
         }
 
-        EndpointInstance ei = (EndpointInstance)websocket;
+        ConfiguredEndpoint ei = (ConfiguredEndpoint)websocket;
         AnnotatedClientEndpointMetadata metadata = (AnnotatedClientEndpointMetadata)ei.getMetadata();
         JsrEvents<ClientEndpoint, ClientEndpointConfig> events = new JsrEvents<>(metadata);
 
@@ -88,15 +78,15 @@ public class JsrClientEndpointImpl implements EventDriverImpl
     @Override
     public boolean supports(Object websocket)
     {
-        if (!(websocket instanceof EndpointInstance))
+        if (!(websocket instanceof ConfiguredEndpoint))
         {
             return false;
         }
 
-        EndpointInstance ei = (EndpointInstance)websocket;
+        ConfiguredEndpoint ei = (ConfiguredEndpoint)websocket;
         Object endpoint = ei.getEndpoint();
 
         ClientEndpoint anno = endpoint.getClass().getAnnotation(ClientEndpoint.class);
         return (anno != null);
-    }
+    }*/
 }

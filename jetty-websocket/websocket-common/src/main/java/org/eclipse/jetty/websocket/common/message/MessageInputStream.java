@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,17 +33,20 @@ import org.eclipse.jetty.util.log.Logger;
 
 /**
  * Support class for reading a (single) WebSocket BINARY message via a InputStream.
- * <p>
+ * <p/>
  * An InputStream that can access a queue of ByteBuffer payloads, along with expected InputStream blocking behavior.
  */
-public class MessageInputStream extends InputStream implements MessageAppender
+public class MessageInputStream extends InputStream implements MessageSink
 {
     private static final Logger LOG = Log.getLogger(MessageInputStream.class);
     private static final ByteBuffer EOF = ByteBuffer.allocate(0).asReadOnlyBuffer();
 
     private final BlockingDeque<ByteBuffer> buffers = new LinkedBlockingDeque<>();
-    private AtomicBoolean closed = new AtomicBoolean(false);
+
+    private final AtomicBoolean closed = new AtomicBoolean(false);
     private final long timeoutMs;
+    private final CountDownLatch closedLatch = new CountDownLatch(1);
+
     private ByteBuffer activeBuffer = null;
 
     public MessageInputStream()
@@ -54,13 +58,13 @@ public class MessageInputStream extends InputStream implements MessageAppender
     {
         this.timeoutMs = timeoutMs;
     }
-
+    
     @Override
-    public void appendFrame(ByteBuffer framePayload, boolean fin) throws IOException
+    public void accept(ByteBuffer payload, Boolean fin)
     {
         if (LOG.isDebugEnabled())
         {
-            LOG.debug("Appending {} chunk: {}",fin?"final":"non-final",BufferUtil.toDetailString(framePayload));
+            LOG.debug("Appending {} chunk: {}", fin ? "final" : "non-final", BufferUtil.toDetailString(payload));
         }
 
         // If closed, we should just toss incoming payloads into the bit bucket.
@@ -74,26 +78,26 @@ public class MessageInputStream extends InputStream implements MessageAppender
         // be processed after this method returns.
         try
         {
-            if (framePayload == null)
+            if (payload == null)
             {
                 // skip if no payload
                 return;
             }
 
-            int capacity = framePayload.remaining();
+            int capacity = payload.remaining();
             if (capacity <= 0)
             {
                 // skip if no payload data to copy
                 return;
             }
             // TODO: the copy buffer should be pooled too, but no buffer pool available from here.
-            ByteBuffer copy = framePayload.isDirect()?ByteBuffer.allocateDirect(capacity):ByteBuffer.allocate(capacity);
-            copy.put(framePayload).flip();
+            ByteBuffer copy = payload.isDirect() ? ByteBuffer.allocateDirect(capacity) : ByteBuffer.allocate(capacity);
+            copy.put(payload).flip();
             buffers.put(copy);
         }
         catch (InterruptedException e)
         {
-            throw new IOException(e);
+            throw new RuntimeException(e);
         }
         finally
         {
@@ -111,6 +115,7 @@ public class MessageInputStream extends InputStream implements MessageAppender
         {
             buffers.offer(EOF);
             super.close();
+            closedLatch.countDown();
         }
     }
 
@@ -124,14 +129,6 @@ public class MessageInputStream extends InputStream implements MessageAppender
     public boolean markSupported()
     {
         return false;
-    }
-
-    @Override
-    public void messageComplete()
-    {
-        if (LOG.isDebugEnabled())
-            LOG.debug("Message completed");
-        buffers.offer(EOF);
     }
 
     @Override
@@ -172,6 +169,7 @@ public class MessageInputStream extends InputStream implements MessageAppender
                         LOG.debug("Reached EOF");
                     // Be sure that this stream cannot be reused.
                     closed.set(true);
+                    closedLatch.countDown();
                     // Removed buffers that may have remained in the queue.
                     buffers.clear();
                     return -1;
@@ -185,6 +183,7 @@ public class MessageInputStream extends InputStream implements MessageAppender
             if (LOG.isDebugEnabled())
                 LOG.debug("Interrupted while waiting to read", x);
             closed.set(true);
+            closedLatch.countDown();
             return -1;
         }
     }
@@ -193,5 +192,17 @@ public class MessageInputStream extends InputStream implements MessageAppender
     public void reset() throws IOException
     {
         throw new IOException("reset() not supported");
+    }
+
+    public void awaitClose()
+    {
+        try
+        {
+            closedLatch.await();
+        }
+        catch (InterruptedException e)
+        {
+            throw new RuntimeException("Stream Close wait interrupted", e);
+        }
     }
 }

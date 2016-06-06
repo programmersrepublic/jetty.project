@@ -31,11 +31,9 @@ import org.eclipse.jetty.http.pathmap.UriTemplatePathSpec;
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.Logger;
 import org.eclipse.jetty.websocket.common.WebSocketSession;
-import org.eclipse.jetty.websocket.common.events.EventDriverFactory;
 import org.eclipse.jetty.websocket.jsr356.ClientContainer;
+import org.eclipse.jetty.websocket.jsr356.ConfiguredEndpoint;
 import org.eclipse.jetty.websocket.jsr356.JsrSessionFactory;
-import org.eclipse.jetty.websocket.jsr356.annotations.AnnotatedEndpointScanner;
-import org.eclipse.jetty.websocket.jsr356.endpoints.EndpointInstance;
 import org.eclipse.jetty.websocket.jsr356.metadata.EndpointMetadata;
 import org.eclipse.jetty.websocket.server.MappedWebSocketCreator;
 import org.eclipse.jetty.websocket.server.WebSocketServerFactory;
@@ -54,14 +52,14 @@ public class ServerContainer extends ClientContainer implements javax.websocket.
         super(factory);
         this.mappedCreator = creator;
         this.webSocketServerFactory = factory;
-        EventDriverFactory eventDriverFactory = this.webSocketServerFactory.getEventDriverFactory();
-        eventDriverFactory.addImplementation(new JsrServerEndpointImpl());
-        eventDriverFactory.addImplementation(new JsrServerExtendsEndpointImpl());
+// FIXME       EventDriverFactory eventDriverFactory = this.webSocketServerFactory.getEventDriverFactory();
+// FIXME       eventDriverFactory.addImplementation(new JsrServerEndpointImpl());
+// FIXME       eventDriverFactory.addImplementation(new JsrServerExtendsEndpointImpl());
         this.webSocketServerFactory.addSessionFactory(new JsrSessionFactory(this));
         addBean(webSocketServerFactory);
     }
     
-    public EndpointInstance newClientEndpointInstance(Object endpoint, ServerEndpointConfig config, String path)
+    public ConfiguredEndpoint newClientEndpointInstance(Object endpoint, ServerEndpointConfig config, String path)
     {
         EndpointMetadata metadata = getClientEndpointMetadata(endpoint.getClass(),config);
         ServerEndpointConfig cec = config;
@@ -76,7 +74,7 @@ public class ServerContainer extends ClientContainer implements javax.websocket.
                 cec = new BasicServerEndpointConfig(this,endpoint.getClass(),path);
             }
         }
-        return new EndpointInstance(endpoint,cec,metadata);
+        return new ConfiguredEndpoint(endpoint,cec);
     }
 
     @Override
@@ -158,11 +156,11 @@ public class ServerContainer extends ClientContainer implements javax.websocket.
         ServerEndpoint anno = endpoint.getAnnotation(ServerEndpoint.class);
         if (anno != null)
         {
-            // Annotated takes precedence here
-            AnnotatedServerEndpointMetadata ametadata = new AnnotatedServerEndpointMetadata(this,endpoint,config);
-            AnnotatedEndpointScanner<ServerEndpoint, ServerEndpointConfig> scanner = new AnnotatedEndpointScanner<>(ametadata);
-            metadata = ametadata;
-            scanner.scan();
+            // FIXME Annotated takes precedence here
+//            AnnotatedServerEndpointMetadata ametadata = new AnnotatedServerEndpointMetadata(this,endpoint,config);
+//            AnnotatedEndpointScanner<ServerEndpoint, ServerEndpointConfig> scanner = new AnnotatedEndpointScanner<>(ametadata);
+//            metadata = ametadata;
+//            scanner.scan();
         }
         else if (Endpoint.class.isAssignableFrom(endpoint))
         {

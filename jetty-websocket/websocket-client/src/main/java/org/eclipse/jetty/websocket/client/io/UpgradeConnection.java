@@ -44,7 +44,6 @@ import org.eclipse.jetty.websocket.client.ClientUpgradeResponse;
 import org.eclipse.jetty.websocket.common.AcceptHash;
 import org.eclipse.jetty.websocket.common.SessionFactory;
 import org.eclipse.jetty.websocket.common.WebSocketSession;
-import org.eclipse.jetty.websocket.common.events.EventDriver;
 import org.eclipse.jetty.websocket.common.extensions.ExtensionStack;
 import org.eclipse.jetty.websocket.common.io.http.HttpResponseHeaderParser;
 import org.eclipse.jetty.websocket.common.io.http.HttpResponseHeaderParser.ParseException;
@@ -307,16 +306,19 @@ public class UpgradeConnection extends AbstractConnection implements Connection.
         EndPoint endp = getEndPoint();
         Executor executor = getExecutor();
 
-        EventDriver websocket = connectPromise.getDriver();
-        WebSocketPolicy policy = websocket.getPolicy();
+        Object websocket = connectPromise.getWebSocketEndpoint();
+        WebSocketPolicy policy = connectPromise.getClient().getPolicy().clonePolicy();
 
+        // Establish Connection
         WebSocketClientConnection connection = new WebSocketClientConnection(endp,executor,connectPromise,policy);
 
+        // Create WebSocket Session
         SessionFactory sessionFactory = connectPromise.getClient().getSessionFactory();
         WebSocketSession session = sessionFactory.createSession(request.getRequestURI(),websocket,connection);
-        session.setPolicy(policy);
         session.setUpgradeRequest(request);
         session.setUpgradeResponse(response);
+
+        // Wire up Session <-> Connection
         connection.addListener(session);
         connectPromise.setSession(session);
 

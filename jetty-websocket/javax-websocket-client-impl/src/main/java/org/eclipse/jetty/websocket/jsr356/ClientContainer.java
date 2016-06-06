@@ -20,18 +20,18 @@ package org.eclipse.jetty.websocket.jsr356;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
+import java.util.function.Function;
 
-import javax.websocket.ClientEndpoint;
 import javax.websocket.ClientEndpointConfig;
 import javax.websocket.DeploymentException;
 import javax.websocket.Endpoint;
@@ -56,14 +56,10 @@ import org.eclipse.jetty.websocket.client.io.UpgradeListener;
 import org.eclipse.jetty.websocket.common.WebSocketSession;
 import org.eclipse.jetty.websocket.common.scopes.SimpleContainerScope;
 import org.eclipse.jetty.websocket.common.scopes.WebSocketContainerScope;
-import org.eclipse.jetty.websocket.jsr356.annotations.AnnotatedEndpointScanner;
 import org.eclipse.jetty.websocket.jsr356.client.AnnotatedClientEndpointMetadata;
 import org.eclipse.jetty.websocket.jsr356.client.EmptyClientEndpointConfig;
-import org.eclipse.jetty.websocket.jsr356.client.SimpleEndpointMetadata;
 import org.eclipse.jetty.websocket.jsr356.decoders.PrimitiveDecoderMetadataSet;
 import org.eclipse.jetty.websocket.jsr356.encoders.PrimitiveEncoderMetadataSet;
-import org.eclipse.jetty.websocket.jsr356.endpoints.EndpointInstance;
-import org.eclipse.jetty.websocket.jsr356.endpoints.JsrEventDriverFactory;
 import org.eclipse.jetty.websocket.jsr356.metadata.EndpointMetadata;
 
 /**
@@ -81,14 +77,13 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
     private final DecoderFactory decoderFactory;
     /** Tracking all primitive encoders for the container */
     private final EncoderFactory encoderFactory;
-
-    /** Tracking for all declared Client endpoints */
-    private final Map<Class<?>, EndpointMetadata> endpointClientMetadataCache;
     /** Tracking for all open Sessions */
     private Set<Session> openSessions = new CopyOnWriteArraySet<>();
     /** The jetty websocket client in use for this container */
     private WebSocketClient client;
-
+    
+    private List<Function<Object,EndpointConfig>> annotatedConfigFunctions = new ArrayList<>();
+    
     public ClientContainer()
     {
         // This constructor is used with Standalone JSR Client usage.
@@ -102,18 +97,18 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
         
         this.scopeDelegate = scope;
         client = new WebSocketClient(scope, new SslContextFactory(trustAll));
-        client.setEventDriverFactory(new JsrEventDriverFactory(client.getPolicy()));
         client.setSessionFactory(new JsrSessionFactory(this));
         addBean(client);
+        
+//        annotatedConfigFunctions.add(new ClientEndpointConfigFunction());
 
-        this.endpointClientMetadataCache = new ConcurrentHashMap<>();
         this.decoderFactory = new DecoderFactory(this,PrimitiveDecoderMetadataSet.INSTANCE);
         this.encoderFactory = new EncoderFactory(this,PrimitiveEncoderMetadataSet.INSTANCE);
 
         ShutdownThread.register(this);
     }
     
-    private Session connect(EndpointInstance instance, URI path) throws IOException
+    private Session connect(ConfiguredEndpoint instance, URI path) throws IOException
     {
         Objects.requireNonNull(instance,"EndpointInstance cannot be null");
         Objects.requireNonNull(path,"Path cannot be null");
@@ -166,28 +161,28 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
     @Override
     public Session connectToServer(Class<? extends Endpoint> endpointClass, ClientEndpointConfig config, URI path) throws DeploymentException, IOException
     {
-        EndpointInstance instance = newClientEndpointInstance(endpointClass,config);
+        ConfiguredEndpoint instance = newClientEndpointInstance(endpointClass,config);
         return connect(instance,path);
     }
 
     @Override
     public Session connectToServer(Class<?> annotatedEndpointClass, URI path) throws DeploymentException, IOException
     {
-        EndpointInstance instance = newClientEndpointInstance(annotatedEndpointClass,null);
+        ConfiguredEndpoint instance = newClientEndpointInstance(annotatedEndpointClass,null);
         return connect(instance,path);
     }
 
     @Override
     public Session connectToServer(Endpoint endpoint, ClientEndpointConfig config, URI path) throws DeploymentException, IOException
     {
-        EndpointInstance instance = newClientEndpointInstance(endpoint,config);
+        ConfiguredEndpoint instance = newClientEndpointInstance(endpoint,config);
         return connect(instance,path);
     }
 
     @Override
     public Session connectToServer(Object endpoint, URI path) throws DeploymentException, IOException
     {
-        EndpointInstance instance = newClientEndpointInstance(endpoint,null);
+        ConfiguredEndpoint instance = newClientEndpointInstance(endpoint,null);
         return connect(instance,path);
     }
     
@@ -206,7 +201,7 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
     protected void doStop() throws Exception
     {
         ShutdownThread.deregister(this);
-        endpointClientMetadataCache.clear();
+//        endpointClientMetadataCache.clear();
         super.doStop();
     }
 
@@ -225,44 +220,45 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
     {
         EndpointMetadata metadata = null;
 
-        synchronized (endpointClientMetadataCache)
-        {
-            metadata = endpointClientMetadataCache.get(endpoint);
-
-            if (metadata != null)
-            {
-                return metadata;
-            }
-
-            ClientEndpoint anno = endpoint.getAnnotation(ClientEndpoint.class);
-            if (anno != null)
-            {
-                // Annotated takes precedence here
-                AnnotatedClientEndpointMetadata annoMetadata = new AnnotatedClientEndpointMetadata(this,endpoint);
-                AnnotatedEndpointScanner<ClientEndpoint, ClientEndpointConfig> scanner = new AnnotatedEndpointScanner<>(annoMetadata);
-                scanner.scan();
-                metadata = annoMetadata;
-            }
-            else if (Endpoint.class.isAssignableFrom(endpoint))
-            {
-                // extends Endpoint
-                @SuppressWarnings("unchecked")
-                Class<? extends Endpoint> eendpoint = (Class<? extends Endpoint>)endpoint;
-                metadata = new SimpleEndpointMetadata(eendpoint,config);
-            }
-            else
-            {
-                StringBuilder err = new StringBuilder();
-                err.append("Not a recognized websocket [");
-                err.append(endpoint.getName());
-                err.append("] does not extend @").append(ClientEndpoint.class.getName());
-                err.append(" or extend from ").append(Endpoint.class.getName());
-                throw new InvalidWebSocketException("Unable to identify as valid Endpoint: " + endpoint);
-            }
-
-            endpointClientMetadataCache.put(endpoint,metadata);
-            return metadata;
-        }
+//        synchronized (endpointClientMetadataCache)
+//        {
+//            metadata = endpointClientMetadataCache.get(endpoint);
+//
+//            if (metadata != null)
+//            {
+//                return metadata;
+//            }
+//
+//            ClientEndpoint anno = endpoint.getAnnotation(ClientEndpoint.class);
+//            if (anno != null)
+//            {
+//                // Annotated takes precedence here
+//                AnnotatedClientEndpointMetadata annoMetadata = new AnnotatedClientEndpointMetadata(this,endpoint);
+//                AnnotatedEndpointScanner<ClientEndpoint, ClientEndpointConfig> scanner = new AnnotatedEndpointScanner<>(annoMetadata);
+//                scanner.scan();
+//                metadata = annoMetadata;
+//            }
+//            else if (Endpoint.class.isAssignableFrom(endpoint))
+//            {
+//                // extends Endpoint
+//                @SuppressWarnings("unchecked")
+//                Class<? extends Endpoint> eendpoint = (Class<? extends Endpoint>)endpoint;
+//                metadata = new SimpleEndpointMetadata(eendpoint,config);
+//            }
+//            else
+//            {
+//                StringBuilder err = new StringBuilder();
+//                err.append("Not a recognized websocket [");
+//                err.append(endpoint.getName());
+//                err.append("] does not extend @").append(ClientEndpoint.class.getName());
+//                err.append(" or extend from ").append(Endpoint.class.getName());
+//                throw new InvalidWebSocketException("Unable to identify as valid Endpoint: " + endpoint);
+//            }
+//
+//            endpointClientMetadataCache.put(endpoint,metadata);
+//            return metadata;
+//        }
+        return metadata;
     }
 
     public DecoderFactory getDecoderFactory()
@@ -346,7 +342,7 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
         return scopeDelegate.getSslContextFactory();
     }
 
-    private EndpointInstance newClientEndpointInstance(Class<?> endpointClass, ClientEndpointConfig config)
+    private ConfiguredEndpoint newClientEndpointInstance(Class<?> endpointClass, ClientEndpointConfig config)
     {
         try
         {
@@ -358,7 +354,7 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
         }
     }
 
-    public EndpointInstance newClientEndpointInstance(Object endpoint, ClientEndpointConfig config)
+    public ConfiguredEndpoint newClientEndpointInstance(Object endpoint, ClientEndpointConfig config)
     {
         EndpointMetadata metadata = getClientEndpointMetadata(endpoint.getClass(),config);
         ClientEndpointConfig cec = config;
@@ -373,7 +369,7 @@ public class ClientContainer extends ContainerLifeCycle implements WebSocketCont
                 cec = new EmptyClientEndpointConfig();
             }
         }
-        return new EndpointInstance(endpoint,cec,metadata);
+        return new ConfiguredEndpoint(endpoint,cec);
     }
 
     @Override

@@ -18,46 +18,39 @@
 
 package org.eclipse.jetty.websocket.jsr356.messages;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import javax.websocket.MessageHandler;
 import javax.websocket.MessageHandler.Partial;
 
-import org.eclipse.jetty.websocket.common.message.MessageAppender;
+import org.eclipse.jetty.websocket.common.message.MessageSink;
 import org.eclipse.jetty.websocket.common.util.Utf8PartialBuilder;
-import org.eclipse.jetty.websocket.jsr356.MessageHandlerWrapper;
 
 /**
  * Partial TEXT MessageAppender for MessageHandler.Partial interface
  */
-public class TextPartialMessage implements MessageAppender
+public class TextPartialMessage implements MessageSink
 {
-    @SuppressWarnings("unused")
-    private final MessageHandlerWrapper msgWrapper;
     private final MessageHandler.Partial<String> partialHandler;
     private final Utf8PartialBuilder utf8Partial;
 
-    @SuppressWarnings("unchecked")
-    public TextPartialMessage(MessageHandlerWrapper wrapper)
+    public TextPartialMessage(Partial<String> handler)
     {
-        this.msgWrapper = wrapper;
-        this.partialHandler = (Partial<String>)wrapper.getHandler();
+        this.partialHandler = handler;
         this.utf8Partial = new Utf8PartialBuilder();
     }
 
     @Override
-    public void appendFrame(ByteBuffer payload, boolean isLast) throws IOException
+    public void accept(ByteBuffer payload, Boolean fin)
     {
         String partialText = utf8Partial.toPartialString(payload);
 
         // No decoders for Partial messages per JSR-356 (PFD1 spec)
-        partialHandler.onMessage(partialText,isLast);
-    }
+        partialHandler.onMessage(partialText, fin);
 
-    @Override
-    public void messageComplete()
-    {
-        /* nothing to do here */
+        if (fin)
+        {
+            utf8Partial.reset();
+        }
     }
 }

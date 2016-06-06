@@ -24,10 +24,11 @@ import java.util.List;
 import javax.websocket.Encoder;
 
 import org.eclipse.jetty.websocket.api.InvalidWebSocketException;
-import org.eclipse.jetty.websocket.common.events.annotated.InvalidSignatureException;
+import org.eclipse.jetty.websocket.common.InvalidSignatureException;
 import org.eclipse.jetty.websocket.common.util.ReflectUtils;
 import org.eclipse.jetty.websocket.jsr356.MessageType;
 
+@Deprecated
 public class EncoderMetadataSet extends CoderMetadataSet<Encoder, EncoderMetadata>
 {
     @Override

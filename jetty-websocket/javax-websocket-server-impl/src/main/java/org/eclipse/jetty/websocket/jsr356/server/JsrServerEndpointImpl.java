@@ -18,17 +18,13 @@
 
 package org.eclipse.jetty.websocket.jsr356.server;
 
-import javax.websocket.OnMessage;
 import javax.websocket.server.ServerEndpoint;
-import javax.websocket.server.ServerEndpointConfig;
 
 import org.eclipse.jetty.websocket.api.WebSocketPolicy;
 import org.eclipse.jetty.websocket.common.events.EventDriver;
 import org.eclipse.jetty.websocket.common.events.EventDriverImpl;
-import org.eclipse.jetty.websocket.jsr356.annotations.JsrEvents;
+import org.eclipse.jetty.websocket.jsr356.ConfiguredEndpoint;
 import org.eclipse.jetty.websocket.jsr356.annotations.OnMessageCallable;
-import org.eclipse.jetty.websocket.jsr356.endpoints.EndpointInstance;
-import org.eclipse.jetty.websocket.jsr356.endpoints.JsrAnnotatedEventDriver;
 
 /**
  * Event Driver for classes annotated with &#064;{@link ServerEndpoint}
@@ -38,13 +34,13 @@ public class JsrServerEndpointImpl implements EventDriverImpl
     @Override
     public EventDriver create(Object websocket, WebSocketPolicy policy) throws Throwable
     {
-        if (!(websocket instanceof EndpointInstance))
+        if (!(websocket instanceof ConfiguredEndpoint))
         {
-            throw new IllegalStateException(String.format("Websocket %s must be an %s",websocket.getClass().getName(),EndpointInstance.class.getName()));
+            throw new IllegalStateException(String.format("Websocket %s must be an %s",websocket.getClass().getName(),ConfiguredEndpoint.class.getName()));
         }
 
-        EndpointInstance ei = (EndpointInstance)websocket;
-        AnnotatedServerEndpointMetadata metadata = (AnnotatedServerEndpointMetadata)ei.getMetadata();
+        ConfiguredEndpoint ei = (ConfiguredEndpoint)websocket;
+        /*FIXME AnnotatedServerEndpointMetadata metadata = (AnnotatedServerEndpointMetadata)ei.getMetadata();
         JsrEvents<ServerEndpoint, ServerEndpointConfig> events = new JsrEvents<>(metadata);
 
         // Handle @OnMessage maxMessageSizes
@@ -64,6 +60,8 @@ public class JsrServerEndpointImpl implements EventDriverImpl
         }
 
         return driver;
+        */
+        return null;
     }
 
     @Override
@@ -80,6 +78,7 @@ public class JsrServerEndpointImpl implements EventDriverImpl
             {
                 continue;
             }
+            /* FIXME
             OnMessage onMsg = callable.getMethod().getAnnotation(OnMessage.class);
             if (onMsg == null)
             {
@@ -89,6 +88,7 @@ public class JsrServerEndpointImpl implements EventDriverImpl
             {
                 return (int)onMsg.maxMessageSize();
             }
+            */
         }
         return defaultMaxMessageSize;
     }
@@ -96,12 +96,12 @@ public class JsrServerEndpointImpl implements EventDriverImpl
     @Override
     public boolean supports(Object websocket)
     {
-        if (!(websocket instanceof EndpointInstance))
+        if (!(websocket instanceof ConfiguredEndpoint))
         {
             return false;
         }
 
-        EndpointInstance ei = (EndpointInstance)websocket;
+        ConfiguredEndpoint ei = (ConfiguredEndpoint)websocket;
         Object endpoint = ei.getEndpoint();
 
         ServerEndpoint anno = endpoint.getClass().getAnnotation(ServerEndpoint.class);

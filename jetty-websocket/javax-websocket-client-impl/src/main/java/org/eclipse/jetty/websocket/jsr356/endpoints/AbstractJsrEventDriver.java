@@ -18,34 +18,21 @@
 
 package org.eclipse.jetty.websocket.jsr356.endpoints;
 
-import java.util.Map;
-
-import javax.websocket.CloseReason;
-import javax.websocket.CloseReason.CloseCode;
-import javax.websocket.CloseReason.CloseCodes;
-import javax.websocket.EndpointConfig;
-import javax.websocket.Session;
-
-import org.eclipse.jetty.websocket.api.WebSocketPolicy;
-import org.eclipse.jetty.websocket.api.extensions.Frame;
-import org.eclipse.jetty.websocket.common.CloseInfo;
-import org.eclipse.jetty.websocket.common.WebSocketSession;
-import org.eclipse.jetty.websocket.common.events.AbstractEventDriver;
-import org.eclipse.jetty.websocket.jsr356.JsrSession;
-import org.eclipse.jetty.websocket.jsr356.metadata.EndpointMetadata;
-
-public abstract class AbstractJsrEventDriver extends AbstractEventDriver
+@Deprecated
+public abstract class AbstractJsrEventDriver /*extends AbstractEventDriver*/
 {
-    protected final EndpointMetadata metadata;
+/*    protected final EndpointMetadata metadata;
+    protected final Executor executor;
     protected final EndpointConfig config;
     protected JsrSession jsrsession;
     private boolean hasCloseBeenCalled = false;
 
-    public AbstractJsrEventDriver(WebSocketPolicy policy, EndpointInstance endpointInstance)
+    public AbstractJsrEventDriver(WebSocketPolicy policy, ConfiguredEndpoint endpointInstance, Executor executor)
     {
         super(policy,endpointInstance.getEndpoint());
         this.config = endpointInstance.getConfig();
         this.metadata = endpointInstance.getMetadata();
+        this.executor = executor;
     }
 
     public EndpointConfig getConfig()
@@ -85,7 +72,7 @@ public abstract class AbstractJsrEventDriver extends AbstractEventDriver
     @Override
     public void onFrame(Frame frame)
     {
-        /* Ignored, not supported by JSR-356 */
+        *//* Ignored, not supported by JSR-356 *//*
     }
 
     @Override
@@ -111,4 +98,9 @@ public abstract class AbstractJsrEventDriver extends AbstractEventDriver
     }
 
     public abstract void setPathParameters(Map<String, String> pathParameters);
+    
+    public void dispatch(Runnable runnable)
+    {
+        executor.execute(runnable);
+    }*/
 }
