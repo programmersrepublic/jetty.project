@@ -20,32 +20,30 @@ package org.eclipse.jetty.websocket.common.reflect;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.Logger;
-import org.eclipse.jetty.websocket.common.reflect.DynamicArgs.Signature;
 import org.eclipse.jetty.websocket.common.util.ReflectUtils;
 
-public class UnorderedSignature implements Signature, Predicate<Method>
+public class DynamicSignature implements Predicate<Method>
 {
-    private final static Logger LOG = Log.getLogger(UnorderedSignature.class);
+    private final static Logger LOG = Log.getLogger(DynamicSignature.class);
     private final Arg[] params;
 
-    public UnorderedSignature(Arg... args)
+    public DynamicSignature(Arg... args)
     {
         this.params = args;
     }
 
-    @Override
     public Arg[] getCallArgs()
     {
         return this.params;
     }
 
-    @Override
     public Predicate<Method> getPredicate()
     {
         return this;
@@ -102,6 +100,10 @@ public class UnorderedSignature implements Signature, Predicate<Method>
                 methodArgs[pi] = argId.apply(methodArgs[pi]);
         }
 
+        // Track callArgs that have been mapped (used when callArgs have repeating types)
+        boolean foundCallArgs[] = new boolean[callArgsLen];
+        Arrays.fill(foundCallArgs, false);
+
         // Iterate through mappings, looking for a callArg that fits it
         for (int ai = 0; ai < argMappingLength; ai++)
         {
@@ -110,8 +112,9 @@ public class UnorderedSignature implements Signature, Predicate<Method>
             // Find reference to argument in callArgs
             for (int ci = 0; ci < callArgsLen; ci++)
             {
-                if (methodArgs[ai].matches(callArgs[ci]))
+                if (!foundCallArgs[ci] && methodArgs[ai].matches(callArgs[ci]))
                 {
+                    foundCallArgs[ci] = true;
                     ref = ci;
                     break;
                 }
@@ -119,27 +122,28 @@ public class UnorderedSignature implements Signature, Predicate<Method>
 
             if (ref < 0)
             {
-                StringBuilder err = new StringBuilder();
-                err.append("Unable to map type [");
-                err.append(methodArgs[ai].getType());
-                err.append("] in method ");
-                ReflectUtils.append(err, method);
-                err.append(" to calling args: (");
-                boolean delim = false;
-                for (Arg arg : callArgs)
-                {
-                    if (delim)
-                        err.append(", ");
-                    err.append(arg);
-                    delim = true;
-                }
-                err.append(")");
-
                 if (throwOnFailure)
+                {
+                    StringBuilder err = new StringBuilder();
+                    err.append("Unable to map type [");
+                    err.append(methodArgs[ai].getType());
+                    err.append("] in method ");
+                    ReflectUtils.append(err, method);
+                    err.append(" to calling args: (");
+                    boolean delim = false;
+                    for (Arg arg : callArgs)
+                    {
+                        if (delim)
+                            err.append(", ");
+                        err.append(arg);
+                        delim = true;
+                    }
+                    err.append(")");
+
                     throw new DynamicArgsException(err.toString());
+                }
                 else
                 {
-                    LOG.debug("{}", err.toString());
                     return null;
                 }
             }
@@ -152,16 +156,7 @@ public class UnorderedSignature implements Signature, Predicate<Method>
         {
             if (callArgs[ci].isRequired())
             {
-                boolean found = false;
-                for (int ai = 0; ai < argMappingLength; ai++)
-                {
-                    if (argMapping[ai] == ci)
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
+                if (!foundCallArgs[ci])
                 {
                     StringBuilder err = new StringBuilder();
                     err.append("Unable to find required type [");
@@ -183,7 +178,6 @@ public class UnorderedSignature implements Signature, Predicate<Method>
         return argMapping;
     }
 
-    @Override
     public BiFunction<Object, Object[], Object> getInvoker(Method method, Arg... callArgs)
     {
         int argMapping[] = getArgMapping(method, true, callArgs);
@@ -244,5 +238,4 @@ public class UnorderedSignature implements Signature, Predicate<Method>
             }
         }
     }
-
 }

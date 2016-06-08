@@ -23,12 +23,15 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
 
 import java.io.File;
+import java.io.Reader;
+import java.io.StringReader;
 import java.lang.reflect.Method;
 
 import org.eclipse.jetty.util.annotation.Name;
+import org.eclipse.jetty.websocket.api.Session;
 import org.junit.Test;
 
-public class UnorderedSignatureTest
+public class DynamicSignatureTest
 {
     @SuppressWarnings("unused")
     public static class SampleSignatures
@@ -40,27 +43,37 @@ public class UnorderedSignatureTest
 
         public String sigStr(String str)
         {
-            return String.format("sigStr<%s>",str);
+            return String.format("sigStr<%s>", str);
         }
 
         public String sigStrFile(String str, File foo)
         {
-            return String.format("sigStrFile<%s,%s>",str,foo);
+            return String.format("sigStrFile<%s,%s>", str, foo);
         }
 
         public String sigFileStr(File foo, String str)
         {
-            return String.format("sigFileStr<%s,%s>",foo,str);
+            return String.format("sigFileStr<%s,%s>", foo, str);
         }
 
         public String sigFileStrFin(File foo, String str, @Name("fin") boolean fin)
         {
-            return String.format("sigFileStrFin<%s,%s,%b>",foo,str,fin);
+            return String.format("sigFileStrFin<%s,%s,%b>", foo, str, fin);
         }
 
-        public String sigByteArray(byte[] buf, @Name("offset")int offset, @Name("length")int len)
+        public String sigByteArray(byte[] buf, @Name("offset") int offset, @Name("length") int len)
         {
-            return String.format("sigByteArray<%s,%d,%d>",buf == null ? "<null>" : ("[" + buf.length + "]"),offset,len);
+            return String.format("sigByteArray<%s,%d,%d>", buf == null ? "<null>" : ("[" + buf.length + "]"), offset, len);
+        }
+
+        public String sigRawByteArray(byte[] buf, int offset, int len)
+        {
+            return String.format("sigRawByteArray<%s,%d,%d>", buf == null ? "<null>" : ("[" + buf.length + "]"), offset, len);
+        }
+
+        public String sigReader(Reader stream)
+        {
+            return String.format("sigReader<%s>", stream == null ? "<null>" : stream.getClass().getSimpleName());
         }
     }
 
@@ -84,16 +97,21 @@ public class UnorderedSignatureTest
     private static final Arg ARG_LENGTH = new Arg(int.class).setTag("length");
     private static final Arg ARG_FIN = new Arg(Boolean.class).setTag("fin");
 
+    private static final Arg ARG_SESSION = new Arg(Session.class);
+    private static final Arg ARG_READER = new Arg(Reader.class);
+
+
     /**
      * Test with method that has empty signature,
      * and desired callable that also has an empty signature
+     *
      * @throws Exception on error
      */
     @Test
     public void testEmptySignature() throws Exception
     {
         DynamicArgs.Builder dab = new DynamicArgs.Builder();
-        dab.addSignature(new UnorderedSignature());
+        dab.addSignature(new DynamicSignature());
 
         SampleSignatures samples = new SampleSignatures();
         Method m = findMethodByName(samples, "sigEmpty");
@@ -108,6 +126,7 @@ public class UnorderedSignatureTest
     /**
      * Test with method that has empty signature,
      * and desired callable that has a String (optional) signature
+     *
      * @throws Exception on error
      */
     @Test
@@ -115,7 +134,7 @@ public class UnorderedSignatureTest
     () throws Exception
     {
         DynamicArgs.Builder dab = new DynamicArgs.Builder();
-        dab.addSignature(new UnorderedSignature(ARG_STR));
+        dab.addSignature(new DynamicSignature(ARG_STR));
 
         SampleSignatures samples = new SampleSignatures();
         Method m = findMethodByName(samples, "sigEmpty");
@@ -130,13 +149,14 @@ public class UnorderedSignatureTest
     /**
      * Test with method that has String signature, and
      * a desired callable that also has String signature.
+     *
      * @throws Exception on error
      */
     @Test
     public void testStringSignature() throws Exception
     {
         DynamicArgs.Builder dab = new DynamicArgs.Builder();
-        dab.addSignature(new UnorderedSignature(ARG_STR));
+        dab.addSignature(new DynamicSignature(ARG_STR));
 
         final Arg CALL_STR = new Arg(String.class);
 
@@ -153,13 +173,14 @@ public class UnorderedSignatureTest
     /**
      * Test of finding a match on a method that is tagged
      * via a the ArgIdentifier concepts.
+     *
      * @throws Exception on error
      */
     @Test
     public void testByteArraySignature() throws Exception
     {
         DynamicArgs.Builder dab = new DynamicArgs.Builder();
-        dab.addSignature(new UnorderedSignature(ARG_BYTEARRAY, ARG_OFFSET, ARG_LENGTH));
+        dab.addSignature(new DynamicSignature(ARG_BYTEARRAY, ARG_OFFSET, ARG_LENGTH));
 
         final Arg CALL_BYTEARRAY = new Arg(byte[].class);
         final Arg CALL_OFFSET = new Arg(int.class).setTag("offset");
@@ -167,18 +188,75 @@ public class UnorderedSignatureTest
 
         SampleSignatures ssigs = new SampleSignatures();
         Method m = findMethodByName(ssigs, "sigByteArray");
-        DynamicArgs dynamicArgs = dab.build(m,CALL_BYTEARRAY, CALL_OFFSET, CALL_LENGTH);
+        DynamicArgs dynamicArgs = dab.build(m, CALL_BYTEARRAY, CALL_OFFSET, CALL_LENGTH);
         assertThat("DynamicArgs", dynamicArgs, notNullValue());
 
         // Test with potential args
         byte buf[] = new byte[222];
         int offset = 3;
         int len = 44;
-        String result = (String)dynamicArgs.invoke(ssigs,buf,offset,len);
+        String result = (String) dynamicArgs.invoke(ssigs, buf, offset, len);
         assertThat("result", result, is("sigByteArray<[222],3,44>"));
 
         // Test with empty potential args
-        result = (String)dynamicArgs.invoke(ssigs,null,123,456);
+        result = (String) dynamicArgs.invoke(ssigs, null, 123, 456);
         assertThat("result", result, is("sigByteArray<<null>,123,456>"));
+    }
+
+    /**
+     * Test of finding a match on a method that is in the raw (with no tags)
+     * and repeated method param types (`int` in this case)
+     *
+     * @throws Exception on error
+     */
+    @Test
+    public void testRawByteArraySignature() throws Exception
+    {
+        final Arg CALL_SESSION = new Arg(Session.class);
+        final Arg CALL_BYTEARRAY = new Arg(byte[].class);
+        final Arg CALL_OFFSET = new Arg(int.class);
+        final Arg CALL_LENGTH = new Arg(int.class);
+
+        DynamicArgs.Builder dab = new DynamicArgs.Builder();
+        dab.addSignature(new DynamicSignature(CALL_SESSION, CALL_BYTEARRAY, CALL_OFFSET, CALL_LENGTH));
+
+        SampleSignatures ssigs = new SampleSignatures();
+        Method m = findMethodByName(ssigs, "sigRawByteArray");
+        DynamicArgs dynamicArgs = dab.build(m, CALL_SESSION, CALL_BYTEARRAY, CALL_OFFSET, CALL_LENGTH);
+        assertThat("DynamicArgs", dynamicArgs, notNullValue());
+
+        // Test with potential args
+        Session session = null;
+        byte buf[] = new byte[222];
+        int offset = 3;
+        int len = 44;
+        String result = (String) dynamicArgs.invoke(ssigs, session, buf, offset, len);
+        assertThat("result", result, is("sigRawByteArray<[222],3,44>"));
+
+        // Test with empty potential args
+        result = (String) dynamicArgs.invoke(ssigs, session, null, 123, 456);
+        assertThat("result", result, is("sigRawByteArray<<null>,123,456>"));
+    }
+
+    @Test
+    public void testOptionalSessionSignature() throws Exception
+    {
+        DynamicArgs.Builder dab = new DynamicArgs.Builder();
+        dab.addSignature(new DynamicSignature(ARG_SESSION, ARG_READER.required()));
+
+        SampleSignatures ssigs = new SampleSignatures();
+        Method m = findMethodByName(ssigs, "sigReader");
+        DynamicArgs dargs = dab.build(m, ARG_SESSION, ARG_READER);
+        assertThat("DynamicArgs", dargs, notNullValue());
+
+        // Test with potential args
+        Session session = null;
+        Reader reader = new StringReader("Hello World");
+        String result = (String) dargs.invoke(ssigs, session, reader);
+        assertThat("result", result, is("sigReader<StringReader>"));
+
+        // Test with empty potential args
+        result = (String) dargs.invoke(ssigs, null, null);
+        assertThat("result", result, is("sigReader<<null>>"));
     }
 }

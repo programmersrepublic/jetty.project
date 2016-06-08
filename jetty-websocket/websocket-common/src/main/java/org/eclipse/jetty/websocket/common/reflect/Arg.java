@@ -37,12 +37,6 @@ public class Arg
         this.type = type;
     }
 
-    public Arg(int idx, Class<?> type)
-    {
-        this.index = idx;
-        this.type = type;
-    }
-
     public Arg(Method method, int idx, Class<?> type)
     {
         this.method = method;

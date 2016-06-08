@@ -37,50 +37,19 @@ import java.util.function.Predicate;
  */
 public class DynamicArgs
 {
-    public interface Signature
-    {
-        /**
-         * Predicate to test if signature matches
-         *
-         * @return the predicate to test if signature matches
-         */
-        Predicate<Method> getPredicate();
-
-        /**
-         * Get Call Args
-         *
-         * @return the Call Args
-         */
-        Arg[] getCallArgs();
-
-        /**
-         * BiFunction to use to invoke method
-         * against give object, with provided (potential) arguments,
-         * returning appropriate result from invocation.
-         *
-         * @param method the method to base BiFunction off of.
-         * @param callArgs the description of arguments passed into each {@link DynamicArgs#invoke(Object, Object...)}
-         * call in the future. Used to map the incoming arguments to the method arguments.
-         * @return the return result of the invoked method
-         */
-        BiFunction<Object, Object[], Object> getInvoker(Method method, Arg... callArgs);
-
-        void appendDescription(StringBuilder str);
-    }
-
     public static class Builder implements Predicate<Method>
     {
-        private List<Signature> signatures = new ArrayList<>();
+        private List<DynamicSignature> signatures = new ArrayList<>();
 
         public DynamicArgs build(Method method, Arg... callArgs)
         {
-            Signature signature = getMatchingSignature(method);
+            DynamicSignature signature = getMatchingSignature(method);
             if (signature == null)
                 return null;
-            return build(method, signature);
+            return new DynamicArgs(signature.getInvoker(method, callArgs));
         }
 
-        public DynamicArgs build(Method method, Signature signature)
+        public DynamicArgs build(Method method, DynamicSignature signature)
         {
             return new DynamicArgs(signature.getInvoker(method, signature.getCallArgs()));
         }
@@ -103,16 +72,16 @@ public class DynamicArgs
         }
 
         /**
-         * Get the {@link Signature} that matches the method
+         * Get the {@link DynamicSignature} that matches the method
          *
          * @param method the method to inspect
          * @return the Signature, or null if no signature match
          */
-        public Signature getMatchingSignature(Method method)
+        public DynamicSignature getMatchingSignature(Method method)
         {
             // FIXME: add match cache (key = method, value = signature)
 
-            for (Signature sig : signatures)
+            for (DynamicSignature sig : signatures)
             {
                 if (sig.getPredicate().test(method))
                 {
@@ -123,7 +92,7 @@ public class DynamicArgs
             return null;
         }
 
-        public Builder addSignature(Signature sig)
+        public Builder addSignature(DynamicSignature sig)
         {
             signatures.add(sig);
             return this;
@@ -131,7 +100,7 @@ public class DynamicArgs
 
         public void appendDescription(StringBuilder err)
         {
-            for (Signature sig : signatures)
+            for (DynamicSignature sig : signatures)
             {
                 err.append(System.lineSeparator());
                 sig.appendDescription(err);

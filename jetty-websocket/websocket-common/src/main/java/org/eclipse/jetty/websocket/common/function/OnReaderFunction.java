@@ -28,7 +28,7 @@ import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 import org.eclipse.jetty.websocket.common.InvalidSignatureException;
 import org.eclipse.jetty.websocket.common.reflect.Arg;
 import org.eclipse.jetty.websocket.common.reflect.DynamicArgs;
-import org.eclipse.jetty.websocket.common.reflect.ExactSignature;
+import org.eclipse.jetty.websocket.common.reflect.DynamicSignature;
 import org.eclipse.jetty.websocket.common.util.ReflectUtils;
 
 /**
@@ -37,14 +37,13 @@ import org.eclipse.jetty.websocket.common.util.ReflectUtils;
 public class OnReaderFunction implements Function<Reader, Void>
 {
     private static final DynamicArgs.Builder ARGBUILDER;
-    private static final Arg ARG_SESSION = new Arg(1, Session.class);
-    private static final Arg ARG_STREAM = new Arg(2, Reader.class);
+    private static final Arg ARG_SESSION = new Arg(Session.class);
+    private static final Arg ARG_STREAM = new Arg(Reader.class);
 
     static
     {
         ARGBUILDER = new DynamicArgs.Builder();
-        ARGBUILDER.addSignature(new ExactSignature(ARG_STREAM));
-        ARGBUILDER.addSignature(new ExactSignature(ARG_SESSION, ARG_STREAM));
+        ARGBUILDER.addSignature(new DynamicSignature(ARG_SESSION, ARG_STREAM.required()));
     }
 
     public static DynamicArgs.Builder getDynamicArgsBuilder()
